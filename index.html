@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tiles Matching Game</title>
     <style>
         :root {
@@ -24,8 +23,7 @@
             margin-top: 20px;
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            width: 90%;
-            max-width: 600px;
+            display: inline-block;
         }
         h1 {
             margin-bottom: 20px;
@@ -58,10 +56,10 @@
         }
         #game-board {
             display: grid;
-            grid-template-columns: repeat(var(--grid-size), 1fr);
+            grid-template-columns: repeat(var(--grid-size), auto);
             gap: 10px;
             margin-bottom: 20px;
-            justify-items: center;
+            justify-content: center;
         }
         .tile {
             width: 80px;
@@ -125,6 +123,17 @@
                 <option value="5">5x5 (Regular)</option>
                 <option value="8">8x8 (Large)</option>
             </select>
+            <label for="shape-count-select">Shapes:</label>
+            <select id="shape-count-select">
+                <option value="3">3 Shapes (Easy)</option>
+                <option value="6">6 Shapes (Hard)</option>
+            </select>
+            <label for="color-palette-select">Color Palette:</label>
+            <select id="color-palette-select">
+                <option value="pastel">Pastel</option>
+                <option value="nature">Nature</option>
+                <option value="greyscale">Greyscale</option>
+            </select>
             <label for="time-limit-select">Time Limit:</label>
             <select id="time-limit-select">
                 <option value="0">None</option>
@@ -143,9 +152,18 @@
         <div id="credits">Made with love by <a href="https://jvboid.dev" target="_blank">Jacob Valdez</a></div>
     </div>
 
+    <!-- Include html2canvas library for capturing screenshots -->
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <script>
-        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#82E0AA', '#F1948A', '#85C1E9'];
-        const shapes = ['circle', 'rect', 'polygon'];
+        const colorsPastel = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#82E0AA', '#F1948A', '#85C1E9'];
+        const colorsNature = ['#556B2F', '#6B8E23', '#2E8B57', '#3CB371', '#8FBC8F', '#228B22', '#006400', '#8B4513', '#A0522D', '#CD853F'];
+        const colorsGreyscale = ['#000000', '#2F2F2F', '#555555', '#7F7F7F', '#A9A9A9', '#D3D3D3', '#FFFFFF'];
+        let colors = colorsPastel;
+
+        const shapes3 = ['circle', 'rect', 'triangle'];
+        const shapes6 = ['circle', 'rect', 'triangle', 'ellipse', 'diamond', 'star'];
+        let shapes = shapes3;
+
         let currentCombo = 0;
         let longestCombo = 0;
         let highScore = 0;
@@ -156,36 +174,42 @@
         let remainingTime = 0;
         let gameBoardState = [];
 
-        function createSVG(color, shape) {
-            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        function createSVG(color, shape, shapeColor) {
+            const svgNS = 'http://www.w3.org/2000/svg';
+            const svg = document.createElementNS(svgNS, 'svg');
             svg.setAttribute('width', '80');
             svg.setAttribute('height', '80');
             svg.setAttribute('viewBox', '0 0 80 80');
 
-            const background = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            const background = document.createElementNS(svgNS, 'rect');
             background.setAttribute('width', '80');
             background.setAttribute('height', '80');
             background.setAttribute('fill', color);
             svg.appendChild(background);
 
-            const shapeElement = document.createElementNS('http://www.w3.org/2000/svg', shape);
+            const shapeElement = document.createElementNS(svgNS, 'path');
+            let pathData = '';
             switch (shape) {
                 case 'circle':
-                    shapeElement.setAttribute('cx', '40');
-                    shapeElement.setAttribute('cy', '40');
-                    shapeElement.setAttribute('r', '25');
+                    shapeElement.setAttribute('d', 'M40 15 A25 25 0 1 0 40 65 A25 25 0 1 0 40 15');
                     break;
                 case 'rect':
-                    shapeElement.setAttribute('x', '20');
-                    shapeElement.setAttribute('y', '20');
-                    shapeElement.setAttribute('width', '40');
-                    shapeElement.setAttribute('height', '40');
+                    shapeElement.setAttribute('d', 'M20 20 H60 V60 H20 Z');
                     break;
-                case 'polygon':
-                    shapeElement.setAttribute('points', '40,15 65,65 15,65');
+                case 'triangle':
+                    shapeElement.setAttribute('d', 'M40 15 L65 65 L15 65 Z');
+                    break;
+                case 'ellipse':
+                    shapeElement.setAttribute('d', 'M10 40 A30 20 0 1 0 70 40 A30 20 0 1 0 10 40');
+                    break;
+                case 'diamond':
+                    shapeElement.setAttribute('d', 'M40 15 L65 40 L40 65 L15 40 Z');
+                    break;
+                case 'star':
+                    shapeElement.setAttribute('d', 'M40 10 L47 35 H72 L52 50 L60 75 L40 60 L20 75 L28 50 L8 35 H33 Z');
                     break;
             }
-            shapeElement.setAttribute('fill', colors[Math.floor(Math.random() * colors.length)]);
+            shapeElement.setAttribute('fill', shapeColor);
             svg.appendChild(shapeElement);
 
             return svg;
@@ -194,7 +218,7 @@
         function createTile(color, shape, shapeColor) {
             const tile = document.createElement('div');
             tile.className = 'tile';
-            tile.appendChild(createSVG(color, shape));
+            tile.appendChild(createSVG(color, shape, shapeColor));
             tile.addEventListener('click', handleTileClick);
             // Save tile attributes for state saving
             tile.dataset.color = color;
@@ -284,19 +308,13 @@
         }
 
         function tilesMatch(tile1, tile2) {
-            const svg1 = tile1.querySelector('svg');
-            const svg2 = tile2.querySelector('svg');
+            const bgColor1 = tile1.dataset.color;
+            const bgColor2 = tile2.dataset.color;
 
-            // Check if background colors match
-            const bgColor1 = svg1.querySelector('rect').getAttribute('fill');
-            const bgColor2 = svg2.querySelector('rect').getAttribute('fill');
+            const shape1 = tile1.dataset.shape;
+            const shape2 = tile2.dataset.shape;
 
-            // Check if shapes match
-            const shape1 = svg1.querySelector('circle, rect:not(:first-child), polygon');
-            const shape2 = svg2.querySelector('circle, rect:not(:first-child), polygon');
-            const shapeMatch = shape1.tagName === shape2.tagName;
-
-            return bgColor1 === bgColor2 || shapeMatch;
+            return bgColor1 === bgColor2 || shape1 === shape2;
         }
 
         function updateScore() {
@@ -338,6 +356,21 @@
             gridSize = parseInt(document.getElementById('grid-size-select').value);
             timeLimit = parseInt(document.getElementById('time-limit-select').value);
             document.documentElement.style.setProperty('--grid-size', gridSize);
+
+            // Get selected shapes count
+            const shapeCount = parseInt(document.getElementById('shape-count-select').value);
+            shapes = shapeCount === 3 ? shapes3 : shapes6;
+
+            // Get selected color palette
+            const colorPalette = document.getElementById('color-palette-select').value;
+            if (colorPalette === 'pastel') {
+                colors = colorsPastel;
+            } else if (colorPalette === 'nature') {
+                colors = colorsNature;
+            } else if (colorPalette === 'greyscale') {
+                colors = colorsGreyscale;
+            }
+
             initializeGame();
         });
 
@@ -362,6 +395,8 @@
                 remainingTime,
                 currentCombo,
                 longestCombo,
+                colors: colors,
+                shapes: shapes,
                 gameBoardState: tilesData
             };
             localStorage.setItem('gameState', JSON.stringify(gameState));
@@ -383,6 +418,13 @@
             if (timeLimit > 0) {
                 startTimer();
             }
+            // Set colors and shapes
+            colors = gameState.colors;
+            shapes = gameState.shapes;
+            // Update selects
+            document.getElementById('color-palette-select').value = (colors === colorsPastel) ? 'pastel' : (colors === colorsNature) ? 'nature' : 'greyscale';
+            document.getElementById('shape-count-select').value = (shapes.length === 3) ? '3' : '6';
+
             const gameBoard = document.getElementById('game-board');
             gameBoard.innerHTML = '';
             gameState.gameBoardState.forEach(tileData => {
@@ -439,7 +481,5 @@
             initializeGame();
         }
     </script>
-    <!-- Include html2canvas library for capturing screenshots -->
-    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 </body>
 </html>
